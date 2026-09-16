@@ -1,0 +1,298 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { motion, AnimatePresence } from "framer-motion";
+
+import type { AnswerKeyItem } from "@/lib/api";
+import { api } from "@/lib/api";
+import { actions, runBatchGrade, useStore, type GradingParams, type StudentResult } from "@/lib/store";
+import GradingFlowScene, { type FlowParam, type FlowPhase, type FlowStudent } from "./GradingFlowScene";
+
+// ============================================================================
+// TYPES
+// ============================================================================
+
+type Phase = "idle" | "uploading" | "processing" | "saving" | "complete" | "error";
+
+interface BatchGradingPipelineProps {
+  open: boolean;
+  onClose: () => void;
+  onComplete: (results: StudentResult[]) => void;
+  provTitle: string;
+  provId: string;
+  klassId: string;
+  klassParams: GradingParams;
+  customParams: string;
+  answerKey: AnswerKeyItem[];
+  files: File[];
+  identificationMethod: "name_field" | "qr_code" | "barcode" | "student_id";
+  /** Antalet elever i klassen – används bara för att visa "N klara / total" i UI. */
+  expectedStudents: number;
+  /** Klick på ett färdigt elevkort — öppna granskningen medan resten rättas. */
+  onOpenResult?: (resultId: string) => void;
+}
+
+// ============================================================================
+// MAIN COMPONENT
+// ============================================================================
+
+export default function BatchGradingPipeline({
+  open,
+  onClose,
+  onComplete,
+  provTitle,
+  provId,
+  klassId,
+  klassParams,
+  customParams,
+  answerKey,
+  files,
+  identificationMethod,
+  expectedStudents,
+  onOpenResult,
+}: BatchGradingPipelineProps) {
+  const [phase, setPhase] = useState<Phase>("idle");
+  const [error, setError] = useState<string | null>(null);
+  const [results, setResults] = useState<StudentResult[]>([]);
+  const [flowStudents, setFlowStudents] = useState<FlowStudent[]>([]);
+  const startedRef = useRef(false);
+  const abortRef = useRef<AbortController | null>(null);
+  const timersRef = useRef<number[]>([]);
+  const runArgsRef = useRef({
+    files,
+    answerKey,
+    klassParams,
+    customParams,
+    identificationMethod,
+    provId,
+    klassId,
+  });
+  runArgsRef.current = {
+    files,
+    answerKey,
+    klassParams,
+    customParams,
+    identificationMethod,
+    provId,
+    klassId,
+  };
+
+  useEffect(() => {
+    if (!open) {
+      // Avbryt INTE fetch:en — backenden fortsätter rätta och persisterar
+      // varje elev direkt. Provsidan poll-ar vidare och visar live-griden.
+      startedRef.current = false;
+      abortRef.current = null;
+      timersRef.current.forEach((t) => window.clearTimeout(t));
+      timersRef.current = [];
+      setPhase("idle");
+      setError(null);
+      setResults([]);
+      setFlowStudents([]);
+      return;
+    }
+    if (startedRef.current) return;
+
+    const { files, answerKey, klassParams, customParams, identificationMethod, provId, klassId } = runArgsRef.current;
+    if (files.length === 0) {
+      actions.updateProvStatus(provId, "draft");
+      setError("Ladda upp minst ett elevsvar innan rättningen startas.");
+      setPhase("error");
+      return;
+    }
+    startedRef.current = true;
+    abortRef.current = new AbortController();
+
+    (async () => {
+      try {
+        const out = await runBatchGrade({
+          provId,
+          klassId,
+          klassParams,
+          customParams,
+          answerKey,
+          files,
+          identificationMethod,
+          onPhase: (p) => setPhase(p),
+          signal: abortRef.current?.signal,
+        });
+        setResults(out.added);
+        setPhase("complete");
+      } catch (e) {
+        if ((e as Error).name === "AbortError") return;
+        setError((e as Error).message);
+        setPhase("error");
+      }
+    })();
+
+    // Ingen cleanup-abort här: `open` går till false innan unmount i alla
+    // riktiga stängningsflöden (hanteras av !open-grenen ovan). En cleanup
+    // som avbryter vid varje effect-körning skulle även avbryta det korrekta
+    // anropet under React 18 Strict Modes avsiktliga mount→cleanup→mount i
+    // dev, vilket gjorde att rättningen avbröts direkt vid start.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const original = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = original;
+    };
+  }, [open]);
+
+  // --- Elevkort: seeda från filnamn, staggera till "working", fyll med riktiga
+  // resultat när batchen returnerar (backend är single-shot → simulerad takt).
+  useEffect(() => {
+    if (!open || files.length === 0) return;
+    setFlowStudents(
+      files.map((f, i) => ({
+        id: `f${i}`,
+        name: f.name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " "),
+        status: "queued" as const,
+      })),
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  // --- Realtidspolling: backenden persisterar varje elev direkt när den är
+  // klar. Vi poll-ar status + resultat och låter korten lösas upp i den takt
+  // rättningen faktiskt går — inget simulerat.
+  useEffect(() => {
+    if (phase !== "processing") return;
+    let cancelled = false;
+
+    const tick = async () => {
+      try {
+        const status = await api.getBatchStatus(provId);
+        await actions.refreshProvResults(provId);
+        if (cancelled) return;
+        const live = useStore
+          .getState()
+          .results.filter((r) => r.provId === provId);
+        const byFile = new Map<string, StudentResult>();
+        for (const r of live) {
+          for (const f of r.sourceFiles ?? []) {
+            if (!byFile.has(f)) byFile.set(f, r);
+          }
+        }
+        setFlowStudents((prev) =>
+          prev.map((s, i) => {
+            const r = byFile.get(files[i]?.name ?? "");
+            if (r) {
+              return {
+                ...s,
+                name: r.studentName || s.name,
+                status: "done" as const,
+                score: r.totalScore,
+                maxScore: r.maxScore,
+                percentage: r.percentage,
+                resultId: r.id,
+              };
+            }
+            // Ej klar ännu: "working" när jobbet kör, "queued" innan
+            // identifieringen givit oss ett totalantal.
+            return {
+              ...s,
+              status: status.running && status.total > 0 ? ("working" as const) : ("queued" as const),
+            };
+          }),
+        );
+      } catch {
+        // Pollfel är icke-fatala — nästa tick försöker igen.
+      }
+    };
+
+    void tick();
+    const interval = window.setInterval(() => void tick(), 2000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, provId]);
+
+  // Vid fel: markera alla kort som inte hunnit bli klara som misslyckade
+  // istf att de fastnar på "Analyserar…"/"I kö" för evigt.
+  useEffect(() => {
+    if (phase !== "error") return;
+    timersRef.current.forEach((t) => window.clearTimeout(t));
+    timersRef.current = [];
+    setFlowStudents((prev) =>
+      prev.map((s) => (s.status === "done" ? s : { ...s, status: "failed" })),
+    );
+  }, [phase]);
+
+  // Mappa filkort → resultat via sourceFiles (ursprungsfilnamn per sida).
+  // Backend returnerar ett resultat per elevDOKUMENT, inte per fil — en
+  // sammanslagen PDF eller flersidigt prov täcker flera/ett filkort. Kort
+  // utan träff markeras "merged" så de aldrig fastnar på "Analyserar…".
+  useEffect(() => {
+    if (results.length === 0) return;
+    const byFile = new Map<string, StudentResult>();
+    for (const r of results) {
+      for (const f of r.sourceFiles ?? []) {
+        if (!byFile.has(f)) byFile.set(f, r);
+      }
+    }
+    files.forEach((f, i) => {
+      const r = byFile.get(f.name);
+      timersRef.current.push(
+        window.setTimeout(() => {
+          setFlowStudents((prev) =>
+            prev.map((s, j) =>
+              j === i
+                ? r
+                  ? {
+                      ...s,
+                      name: r.studentName || s.name,
+                      status: "done",
+                      score: r.totalScore,
+                      maxScore: r.maxScore,
+                      percentage: r.percentage,
+                      resultId: r.id,
+                    }
+                  : { ...s, status: "merged" }
+                : s,
+            ),
+          );
+        }, i * 300),
+      );
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [results]);
+
+  if (!open || typeof document === "undefined") return null;
+
+  const modal = (
+    <AnimatePresence>
+      <motion.div
+        key="batch-overlay"
+        initial={{ opacity: 0, scale: 0.94, borderRadius: 28 }}
+        animate={{ opacity: 1, scale: 1, borderRadius: 0 }}
+        exit={{ opacity: 0, scale: 0.94, borderRadius: 28 }}
+        transition={{ type: "spring", damping: 30, stiffness: 300 }}
+        className="fixed inset-0 z-[300] overflow-hidden"
+        style={{
+          background: "rgb(var(--background))",
+          transformOrigin: "center center",
+        }}
+      >
+        <GradingFlowScene
+          provTitle={provTitle}
+          phase={phase as FlowPhase}
+          students={flowStudents}
+          totalCount={expectedStudents || files.length}
+          error={error}
+          onClose={onClose}
+          onReview={phase === "complete" ? () => onComplete(results) : undefined}
+          onOpenResult={onOpenResult}
+        />
+      </motion.div>
+    </AnimatePresence>
+  );
+
+  return createPortal(modal, document.body);
+}
