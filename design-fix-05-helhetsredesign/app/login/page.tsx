@@ -10,6 +10,7 @@ import { createClient } from "@/lib/supabase/client";
 import { API_URL } from "@/lib/api";
 import LineIcon, { type IconName } from "@/components/LineIcon";
 import Surface from "@/components/ui/Surface";
+import { useDirection } from "@/lib/direction";
 
 type AuthMode = "login" | "signup" | "access";
 
@@ -722,6 +723,54 @@ function ProductDemo({ compact = false }: { compact?: boolean }) {
 function Hero({ openAuth }: { openAuth: (mode: AuthMode) => void }) {
   const ref = useRef<HTMLDivElement>(null);
   const isInView = useInView(ref, { once: true, amount: 0.2 });
+  const { direction } = useDirection();
+
+  /* ---------- C · SÖNDAGSKVÄLL — mörk, centrerad, inget foto ---------- */
+  if (direction === "kvall") {
+    return (
+      <section ref={ref} className="relative overflow-hidden bg-paper pt-36 pb-32">
+        <div className="mx-auto max-w-2xl px-6 text-center">
+          <motion.h1
+            initial={{ opacity: 0, y: 20 }}
+            animate={isInView ? { opacity: 1, y: 0 } : {}}
+            transition={{ duration: 0.8, delay: 0.05, ease: [0.22, 1, 0.36, 1] }}
+            className="text-[clamp(38px,5vw,58px)] font-medium leading-[1.08] tracking-[-0.03em] text-ink"
+          >
+            Rätta smartare.
+          </motion.h1>
+          <motion.p
+            initial={{ opacity: 0, y: 20 }}
+            animate={isInView ? { opacity: 1, y: 0 } : {}}
+            transition={{ duration: 0.8, delay: 0.18, ease: [0.22, 1, 0.36, 1] }}
+            className="mt-5 text-[clamp(16px,1.5vw,19px)] font-light leading-[1.5] text-ink-secondary"
+          >
+            Lägg tiden på eleverna.
+          </motion.p>
+          <motion.p
+            initial={{ opacity: 0 }}
+            animate={isInView ? { opacity: 1 } : {}}
+            transition={{ duration: 0.9, delay: 0.4 }}
+            className="hand mt-8 text-[24px] text-accent"
+          >
+            — du har alltid sista ordet
+          </motion.p>
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={isInView ? { opacity: 1, y: 0 } : {}}
+            transition={{ duration: 0.7, delay: 0.5, ease: [0.22, 1, 0.36, 1] }}
+            className="mt-10 flex flex-wrap items-center justify-center gap-3"
+          >
+            <button onClick={() => openAuth("access")} className="btn-primary px-7 py-3.5">
+              Begär åtkomst
+            </button>
+            <Link href="/demo" className="btn-secondary px-7 py-3.5">
+              Se demo
+            </Link>
+          </motion.div>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section

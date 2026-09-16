@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useStore, actions, type Prov, type StudentResult, type Klass, type Question } from "@/lib/store";
 import { useTheme, type ReviewLayout } from "@/lib/theme";
+import { useDirection } from "@/lib/direction";
 import Surface from "./ui/Surface";
 import EmptyState from "./ui/EmptyState";
 import StatusBadge from "./ui/StatusBadge";
@@ -13,10 +14,12 @@ import "katex/dist/katex.min.css";
 
 export default function ReviewWorkbench() {
   const { reviewLayout } = useTheme();
+  const { direction } = useDirection();
   const prov = useStore((s) => s.prov);
   const results = useStore((s) => s.results);
   const klasser = useStore((s) => s.klasser);
   const [selectedProv, setSelectedProv] = useState<Prov | null>(null);
+  const [selectedResultId, setSelectedResultId] = useState<string | null>(null);
   const [showPublish, setShowPublish] = useState(false);
   const [editingStep, setEditingStep] = useState<{ resultId: string; stepId: string } | null>(null);
   const [editPoints, setEditPoints] = useState<string>("");
@@ -31,6 +34,15 @@ export default function ReviewWorkbench() {
       setShowPublish(false);
     }
   }, [completedProv, selectedProv]);
+
+  useEffect(() => {
+    // Kö-riktningarna (bänken, söndagskväll) hoppar direkt in i det första
+    // provet som väntar — inget extra klick mellan lista och arbete.
+    if (!selectedProv && direction !== "arkiv") {
+      const next = completedProv.find((p) => p.status === "review");
+      if (next) setSelectedProv(next);
+    }
+  }, [completedProv, selectedProv, direction]);
 
   useEffect(() => {
     // Poll while any prov is still being graded so the list becomes
@@ -149,27 +161,130 @@ export default function ReviewWorkbench() {
             )}
           </div>
 
-          <div className="space-y-4">
-            {(() => {
-              const provResults = getProvResults(selectedProv.id);
-              const questions = deriveQuestions(provResults);
-              return provResults.map((result) => (
-                <ResultCard
-                  key={result.id}
-                  result={result}
-                  questions={questions}
-                  klass={getKlass(selectedProv.id)}
-                  editingStep={editingStep}
-                  editPoints={editPoints}
-                  onEditStep={startEditStep}
-                  onPointsChange={setEditPoints}
-                  onSave={saveStep}
-                  onCancel={() => setEditingStep(null)}
-                  layout={reviewLayout}
-                />
-              ));
-            })()}
-          </div>
+          {(() => {
+            const provResults = getProvResults(selectedProv.id);
+            const questions = deriveQuestions(provResults);
+            const isDone = (r: StudentResult) =>
+              r.steps.filter((s) => !s.error && s.found !== false).every((s) => s.reviewed);
+            const firstUnreviewed = provResults.find((r) => !isDone(r)) ?? provResults[0];
+            const current =
+              provResults.find((r) => r.id === selectedResultId) ?? firstUnreviewed;
+            const idx = current ? provResults.indexOf(current) : -1;
+            const cardProps = {
+              questions,
+              klass: getKlass(selectedProv.id),
+              editingStep,
+              editPoints,
+              onEditStep: startEditStep,
+              onPointsChange: setEditPoints,
+              onSave: saveStep,
+              onCancel: () => setEditingStep(null),
+            };
+
+            /* ---------- B · BÄNKEN — master-detail med kö ---------- */
+            if (direction === "bank" && current) {
+              return (
+                <div className="grid gap-4 lg:grid-cols-[240px_1fr]">
+                  <aside className="overflow-hidden rounded-lg border border-ink-hairline bg-paper-raised">
+                    <div className="border-b border-ink-hairline px-3 py-2 text-[11px] font-medium uppercase tracking-[0.08em] text-ink-muted">
+                      Kö — {provResults.filter(isDone).length}/{provResults.length} klara
+                    </div>
+                    <div className="max-h-[560px] overflow-auto">
+                      {provResults.map((r) => {
+                        const done = isDone(r);
+                        const active = r.id === current.id;
+                        return (
+                          <button
+                            key={r.id}
+                            type="button"
+                            onClick={() => setSelectedResultId(r.id)}
+                            className={`flex w-full items-center justify-between gap-2 border-b border-ink-hairline px-3 py-2.5 text-left text-[13px] transition-colors last:border-0 ${
+                              active ? "bg-ink/[0.05] font-medium text-ink" : "text-ink-secondary hover:bg-ink/[0.03]"
+                            }`}
+                          >
+                            <span className="truncate">{r.studentName}</span>
+                            {done ? (
+                              <LineIcon name="check" className="h-3.5 w-3.5 shrink-0 text-state-success" />
+                            ) : (
+                              <span className="shrink-0 font-mono text-[11px] tabular-nums text-ink-muted">
+                                {r.steps.filter((s) => s.reviewed).length}/{r.steps.length}
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </aside>
+                  <div>
+                    <div className="mb-3 flex items-center justify-between">
+                      <span className="font-mono text-[12px] text-ink-muted">
+                        Elev {idx + 1}/{provResults.length}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const next = provResults.find((r, i) => i > idx && !isDone(r));
+                          if (next) setSelectedResultId(next.id);
+                        }}
+                        className="btn-secondary !py-1.5 text-[12.5px]"
+                      >
+                        Nästa ogranskade →
+                      </button>
+                    </div>
+                    <ResultCard key={current.id} result={current} {...cardProps} layout={reviewLayout} />
+                  </div>
+                </div>
+              );
+            }
+
+            /* ---------- C · SÖNDAGSKVÄLL — en i taget ---------- */
+            if (direction === "kvall" && current) {
+              return (
+                <div className="mx-auto max-w-2xl">
+                  <div className="mb-5 flex items-center justify-between text-[13px] text-ink-muted">
+                    <button
+                      type="button"
+                      disabled={idx <= 0}
+                      onClick={() => setSelectedResultId(provResults[idx - 1].id)}
+                      className="btn-tertiary disabled:opacity-40"
+                    >
+                      ← Föregående
+                    </button>
+                    <span className="tabular-nums">
+                      {idx + 1} av {provResults.length}
+                    </span>
+                    <button
+                      type="button"
+                      disabled={idx >= provResults.length - 1}
+                      onClick={() => setSelectedResultId(provResults[idx + 1].id)}
+                      className="btn-tertiary disabled:opacity-40"
+                    >
+                      Nästa →
+                    </button>
+                  </div>
+                  <ResultCard key={current.id} result={current} {...cardProps} layout={reviewLayout} />
+                  {isDone(current) && idx < provResults.length - 1 && (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedResultId(provResults[idx + 1].id)}
+                      className="btn-primary mx-auto mt-6 flex"
+                    >
+                      {current.studentName} är klar — nästa elev
+                    </button>
+                  )}
+                </div>
+              );
+            }
+
+            /* ---------- A · ARKIVET — dokumentvy ---------- */
+            return (
+              <div className="space-y-4">
+                {provResults.map((result) => (
+                  <ResultCard key={result.id} result={result} {...cardProps} layout={reviewLayout} />
+                ))}
+              </div>
+            );
+          })()}
         </div>
       )}
 

@@ -22,25 +22,21 @@ const DirectionContext = createContext<DirectionContextType | undefined>(undefin
 export function DirectionProvider({ children }: { children: React.ReactNode }) {
   const [direction, setDirectionState] = useState<Direction>("arkiv");
   const [mounted, setMounted] = useState(false);
-  const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
 
   useEffect(() => {
-    setMounted(true);
-    const fromUrl = searchParams.get("dir") as Direction | null;
+    // Läs ?dir= från URL:en först, annars sparad riktning
+    const params = new URLSearchParams(window.location.search);
+    const fromUrl = params.get("dir") as Direction | null;
     if (fromUrl && VALID.includes(fromUrl)) {
       setDirectionState(fromUrl);
+    } else {
       try {
-        localStorage.setItem("wiseos-direction", fromUrl);
+        const stored = localStorage.getItem("wiseos-direction") as Direction | null;
+        if (stored && VALID.includes(stored)) setDirectionState(stored);
       } catch {}
-      return;
     }
-    try {
-      const stored = localStorage.getItem("wiseos-direction") as Direction | null;
-      if (stored && VALID.includes(stored)) setDirectionState(stored);
-    } catch {}
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     if (!mounted) return;
@@ -48,8 +44,8 @@ export function DirectionProvider({ children }: { children: React.ReactNode }) {
     try {
       localStorage.setItem("wiseos-direction", direction);
     } catch {}
-    // Söndagskväll föreslår dark — övriga light. Respekterar manuell temaväxling
-    // eftersom den bara sätter temat vid riktningsbyte.
+    // Söndagskväll föreslår dark — övriga light. Sätts vid riktningsbyte;
+    // temaväljaren fungerar fortfarande fritt efteråt.
     const suggestedTheme = direction === "kvall" ? "dark" : "light";
     try {
       localStorage.setItem("wiseos-theme", suggestedTheme);
@@ -60,9 +56,9 @@ export function DirectionProvider({ children }: { children: React.ReactNode }) {
 
   const setDirection = (d: Direction) => {
     setDirectionState(d);
-    const params = new URLSearchParams(searchParams.toString());
-    params.set("dir", d);
-    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    const url = new URL(window.location.href);
+    url.searchParams.set("dir", d);
+    window.history.replaceState(null, "", url.toString());
   };
 
   return (

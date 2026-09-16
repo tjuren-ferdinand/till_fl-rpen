@@ -559,3 +559,190 @@ html:not(.dark) .wiseos-logo-label {
   background-clip: text;
 }
 
+
+/* ============================================================ */
+/*  DESIGN DIRECTIONS — helhetsredesign (data-dir)               */
+/*  Tre skilda visuella identiteter, växlbara via ?dir= eller    */
+/*  DirectionSwitcher. Placerade sist i filen → vinner över      */
+/*  light/cream/dark.                                            */
+/* ============================================================ */
+
+/* ---------- A · ARKIVET — editorial lugn --------------------- */
+/*  Serif-display (Fraunces), dokumentkänsla, skogsgrön accent.  */
+html[data-dir="arkiv"],
+html[data-dir="arkiv"][data-theme] {
+  --background: 250 249 247;    /* #faf9f7 varmvitt arkivpapper */
+  --surface: 255 255 255;       /* #ffffff dokumentytor */
+  --surface-2: 240 238 232;     /* #f0eee8 sekundär */
+  --surface-elevated: 255 255 255;
+  --card: 255 255 255;
+  --foreground: 35 34 31;       /* #23221f bläck */
+  --muted: 107 103 95;          /* #6b675f */
+  --muted-2: 169 164 154;       /* #a9a49a */
+  --hairline: 35 34 31;         /* hairlines = bläck */
+  --accent: 47 93 67;           /* #2f5d43 skogsgrön — godkännande-stämpeln */
+  --accent-soft: 107 154 128;   /* #6b9a80 */
+  --accent-fg: 250 249 247;
+  --state-success: 63 122 88;   /* #3f7a58 */
+  --state-warning: 176 138 62;  /* #b08a3e */
+  --state-danger: 168 60 50;    /* #a83c32 */
+
+  --equi-bg: #faf9f7;
+  --equi-surface: #ffffff;
+  --equi-surface-2: #f0eee8;
+  --equi-ink: #23221f;
+  --equi-muted: #6b675f;
+  --equi-subtle: #d8d4ca;
+  --equi-brand: #2f5d43;
+  --equi-brand-2: #6b9a80;
+  --equi-accent: #4a7a5e;
+  --equi-success: #3f7a58;
+  --equi-warning: #b08a3e;
+  --equi-danger: #a83c32;
+  --equi-ring: #a9a49a;
+
+  --arc-subtle: 35 34 31;
+  --arc-gold: 47 93 67;
+  --arc-copper: 107 154 128;
+  --wiseos-bg: #faf9f7;
+  --wiseos-fg: #2f5d43;
+}
+
+/* Arkivet: serif på rubriker, skarpare hairlines, plattare ytor */
+html[data-dir="arkiv"] body {
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+html[data-dir="arkiv"] h1,
+html[data-dir="arkiv"] h2,
+html[data-dir="arkiv"] h3 {
+  font-family: "Fraunces", Georgia, "Times New Roman", serif;
+  font-weight: 500;
+  letter-spacing: -0.015em;
+}
+html[data-dir="arkiv"] .shadow-soft,
+html[data-dir="arkiv"] .shadow-card {
+  box-shadow: none;
+}
+html[data-dir="arkiv"] .btn-primary {
+  border-radius: 6px;
+}
+html[data-dir="arkiv"] .input {
+  border-radius: 6px;
+}
+
+/* ---------- B · BÄNKEN — arbetsyta, densitet ------------------ */
+/*  Kall neutral, rödpenna-accent, tätare kontroller, mono-siffror */
+html[data-dir="bank"],
+html[data-dir="bank"][data-theme] {
+  --background: 244 244 243;    /* #f4f4f3 kallt neutral */
+  --surface: 255 255 255;
+  --surface-2: 236 236 234;     /* #ececea */
+  --surface-elevated: 255 255 255;
+  --card: 255 255 255;
+  --foreground: 28 30 33;       /* #1c1e21 */
+  --muted: 95 99 104;           /* #5f6368 */
+  --muted-2: 154 157 162;       /* #9a9da2 */
+  --hairline: 28 30 33;
+  --accent: 179 38 30;          /* #b3261e rödpennan — lärarens hand */
+  --accent-soft: 224 141 133;   /* #e08d85 */
+  --accent-fg: 255 255 255;
+  --state-success: 63 122 88;
+  --state-warning: 176 138 62;
+  --state-danger: 179 38 30;    /* danger = samma rödpenna */
+
+  --equi-bg: #f4f4f3;
+  --equi-surface: #ffffff;
+  --equi-surface-2: #ececea;
+  --equi-ink: #1c1e21;
+  --equi-muted: #5f6368;
+  --equi-subtle: #d4d5d7;
+  --equi-brand: #b3261e;
+  --equi-brand-2: #e08d85;
+  --equi-accent: #5f6368;
+  --equi-success: #3f7a58;
+  --equi-warning: #b08a3e;
+  --equi-danger: #b3261e;
+  --equi-ring: #9a9da2;
+
+  --arc-subtle: 28 30 33;
+  --arc-gold: 179 38 30;
+  --arc-copper: 95 99 104;
+  --wiseos-bg: #f4f4f3;
+  --wiseos-fg: #b3261e;
+}
+
+html[data-dir="bank"] body {
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+html[data-dir="bank"] .btn-primary {
+  border-radius: 6px;
+  padding-left: 1rem;
+  padding-right: 1rem;
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+}
+html[data-dir="bank"] .btn-secondary,
+html[data-dir="bank"] .btn-tertiary,
+html[data-dir="bank"] .input {
+  border-radius: 6px;
+}
+html[data-dir="bank"] .tnum,
+html[data-dir="bank"] .font-mono {
+  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/* ---------- C · SÖNDAGSKVÄLL — mörk-först --------------------- */
+/*  Varm #181717-bas (godkänd ramp), amber accent, lugnt tempo.   */
+html[data-dir="kvall"],
+html[data-dir="kvall"][data-theme] {
+  --background: 24 23 23;       /* #181717 */
+  --surface: 32 31 30;          /* #201f1e */
+  --surface-2: 48 47 46;        /* #302f2e */
+  --surface-elevated: 40 39 38; /* #282726 */
+  --card: 32 31 30;
+  --foreground: 242 239 234;    /* #f2efea */
+  --muted: 193 191 187;         /* #c1bfbb */
+  --muted-2: 145 143 140;       /* #918f8c */
+  --hairline: 242 239 234;
+  --accent: 214 185 106;        /* #d6b96a varm amber — lågenergi */
+  --accent-soft: 227 204 143;   /* #e3cc8f */
+  --accent-fg: 24 23 23;
+  --state-success: 125 168 127; /* #7da87f */
+  --state-warning: 214 185 106;
+  --state-danger: 201 126 126;  /* #c97e7e */
+
+  --equi-bg: #181717;
+  --equi-surface: #201f1e;
+  --equi-surface-2: #302f2e;
+  --equi-ink: #f2efea;
+  --equi-muted: #c1bfbb;
+  --equi-subtle: #484746;
+  --equi-brand: #d6b96a;
+  --equi-brand-2: #e3cc8f;
+  --equi-accent: #918f8c;
+  --equi-success: #7da87f;
+  --equi-warning: #d6b96a;
+  --equi-danger: #c97e7e;
+  --equi-ring: #605f5d;
+
+  --arc-subtle: 242 239 234;
+  --arc-gold: 214 185 106;
+  --arc-copper: 227 204 143;
+  --wiseos-bg: #181717;
+  --wiseos-fg: #e3cc8f;
+}
+
+html[data-dir="kvall"] body {
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+/* Mjukare, rundare kontroller — kvällslugn */
+html[data-dir="kvall"] .btn-primary,
+html[data-dir="kvall"] .btn-secondary,
+html[data-dir="kvall"] .btn-tertiary,
+html[data-dir="kvall"] .input {
+  border-radius: 12px;
+}
+/* Handstil för läraranteckningar / accenter */
+html[data-dir="kvall"] .hand {
+  font-family: "Caveat", cursive;
+}
